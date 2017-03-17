@@ -11,18 +11,28 @@ import com.seckill.exception.RepeatKillException;
 import com.seckill.exception.SeckillCloseException;
 import com.seckill.exception.SeckillException;
 import com.seckill.service.SeckillService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.DigestUtils;
 
+import javax.annotation.Resource;
 import java.util.Date;
 import java.util.List;
 
 /**
  * Created by liheng on 2017/3/14.
  */
+@Service
 public class SeckillServiceImpl implements SeckillService {
+    private Logger logger = LoggerFactory.getLogger(this.getClass());
 
+    @Autowired
     private SeckillDao seckillDao;
 
+    @Autowired
     private SuccessKilledDao successKilledDao;
 
     //MD5盐值字符串，用于混淆MD5
@@ -33,6 +43,7 @@ public class SeckillServiceImpl implements SeckillService {
     }
 
     public Seckill getById(long seckillId) {
+
         return seckillDao.queryById(seckillId);
     }
 
@@ -54,8 +65,15 @@ public class SeckillServiceImpl implements SeckillService {
         return new Exposer(true,md5,seckillId);
     }
 
+    /**
+     * 使用注解控制事务方法的有点
+     * 1、开发团队达成一致约定，明确标注事务方法的编程风格
+     * 2、保障事务方法的执行时间尽可能短，不要穿插其他网络操作（RPC/HTTP请求）或者剥离到事务方法外部。
+     * 3、不是所有的方法都需要事务，如只有一条的修改操作、只读操作不需要事务控制
+     */
+    @Transactional
     public SeckillExecution executeSeckill(long seckillId, long userPhone, String md5) throws SeckillException, RepeatKillException, SeckillCloseException {
-        if (md5 == null || md5.equals(getMD5(seckillId))) {
+        if (md5 == null || !md5.equals(getMD5(seckillId))) {
             throw new SeckillException("seckill data rewrite !");
         }
         //执行秒杀逻辑：减库存 + 记录购买行为
@@ -81,6 +99,7 @@ public class SeckillServiceImpl implements SeckillService {
         }catch (RepeatKillException e2){
             throw e2;
         }catch (Exception e) {
+            logger.error(e.getMessage(),e);
             //所有编译期异常，转化为运行期异常
             throw new SeckillException("seckill inner error: "+e.getMessage());
         }
